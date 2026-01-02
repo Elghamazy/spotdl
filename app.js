@@ -268,7 +268,7 @@ app.get('/download', async (req, res) => {
 	};
 
 	try {
-		// Create temporary unique download subdirectory in OS temp directory
+		// Create temporary unique download subdirectory in the system temp directory
 		const uniqueId = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 		downloadDir = path.join(os.tmpdir(), `spotdl-${cacheKey}-${uniqueId}`);
 		
