@@ -24,6 +24,17 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
+// Diagnostic: show presence of required env vars (no secret values)
+const requiredEnv = ['GOOGLE_API_KEY','GOOGLE_CX','SPOTIFY_CLIENT_ID','SPOTIFY_CLIENT_SECRET'];
+console.log('Env presence:', requiredEnv.map(k => `${k}=${!!process.env[k]}`).join(', '));
+
+// Health endpoint reports which required env vars are set (boolean)
+app.get('/health', (req, res) => {
+	const status = {};
+	requiredEnv.forEach(k => { status[k] = !!process.env[k]; });
+	res.json({ env: status });
+});
+
 // Cache expiry in milliseconds (1 hour)
 const CACHE_EXPIRY_MS = 60 * 60 * 1000;
 
