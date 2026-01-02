@@ -4,7 +4,12 @@ FROM node:18-alpine
 RUN apk add --no-cache python3 py3-pip ffmpeg build-base
 
 # Install spotdl (Python package) globally
-RUN pip3 install --no-cache-dir spotdl
+RUN python3 -m venv /opt/venv \
+	&& /opt/venv/bin/pip install --upgrade pip \
+	&& /opt/venv/bin/pip install --no-cache-dir spotdl
+
+# Ensure venv binaries (including the `spotdl` CLI) are on PATH
+ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /usr/src/app
 
