@@ -91,9 +91,9 @@ async function googleSearchTracks(query) {
 	return (data.items || []).map((item) => item.link);
 }
 
-// Search specifically targeting SoundCloud using the provided CX
-async function googleSearchSoundcloud(query) {
-    const q = encodeURIComponent(`${query} site:soundcloud.com`);
+// Search specifically targeting youtube using the provided CX
+async function googleSearchYoutube(query) {
+    const q = encodeURIComponent(`${query} site:Youtube.com`);
     const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SOUND_CX}&q=${q}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Google CSE error ${res.status}`);
@@ -173,28 +173,28 @@ app.get('/search', async (req, res) => {
 app.get('/download', async (req, res) => {
 	let trackUrl = req.query.url || req.query.track_url;
 	const qParam = req.query.q;
-	// If caller provided a search query (song + artist), try the SoundCloud search CX
+	// If caller provided a search query (song + artist), try the Youtube search CX
 	if (!trackUrl && qParam) {
 		try {
-			const links = await googleSearchSoundcloud(qParam);
+			const links = await googleSearchYoutube(qParam);
 			if (links && links.length > 0) {
 				console.log('Search results for q:', qParam, links[0]);
-				if (links[0].includes('soundcloud.com')) {
+				if (links[0].includes('youtube.com')) {
 					trackUrl = links[0];
-					console.log('Using SoundCloud URL from search:', trackUrl);
+					console.log('Using Youtube URL from search:', trackUrl);
 				} else {
-					return res.status(400).json({ error: 'First search result is not a SoundCloud URL' });
+					return res.status(400).json({ error: 'First search result is not a Youtube URL' });
 				}
 			} else {
 				return res.status(404).json({ error: 'No search results found' });
 			}
 		} catch (e) {
-			console.error('SoundCloud search error:', e.message);
-			return res.status(500).json({ error: 'SoundCloud search failed' });
+			console.error('Youtube search error:', e.message);
+			return res.status(500).json({ error: 'Youtube search failed' });
 		}
 	}
 
-	// If the provided URL is a Spotify track, try to resolve to a SoundCloud URL
+	// If the provided URL is a Spotify track, try to resolve to a Youtube URL
 	if (trackUrl && trackUrl.includes('open.spotify.com/track')) {
 		try {
 			const id = extractTrackId(trackUrl);
@@ -203,17 +203,17 @@ app.get('/download', async (req, res) => {
 				const info = await getTrackInfo(id, token);
 				const artists = (info.artists || []).map(a => a.name).join(' ');
 				const searchQuery = `${info.name} ${artists}`;
-				console.log('Searching SoundCloud for Spotify track:', searchQuery);
-				const scLinks = await googleSearchSoundcloud(searchQuery);
-				if (scLinks && scLinks.length > 0 && scLinks[0].includes('soundcloud.com')) {
-					console.log('Resolved Spotify track to SoundCloud URL:', scLinks[0]);
+				console.log('Searching Youtube for Spotify track:', searchQuery);
+				const scLinks = await googleSearchYoutube(searchQuery);
+				if (scLinks && scLinks.length > 0 && scLinks[0].includes('youtube.com')) {
+					console.log('Resolved Spotify track to Youtube URL:', scLinks[0]);
 					trackUrl = scLinks[0];
 				} else {
-					console.log('No SoundCloud match found for Spotify track; proceeding with original URL');
+					console.log('No Youtube match found for Spotify track; proceeding with original URL');
 				}
 			}
 		} catch (e) {
-			console.warn('Failed to map Spotify track to SoundCloud:', e.message);
+			console.warn('Failed to map Spotify track to Youtube:', e.message);
 		}
 	}
 	if (!trackUrl) return res.status(400).json({ error: 'Missing url parameter' });
@@ -336,7 +336,7 @@ app.get('/download', async (req, res) => {
 
 		console.log('Download directory created successfully');
 
-		// Use the directory path directly; we'll use yt-dlp / youtube-dl for downloads
+		// Use the directory path directly; we'll use yt-dlp / Youtube-dl for downloads
 		console.log('Starting download for URL:', trackUrl);
 		console.log('Working directory:', process.cwd());
 
@@ -374,7 +374,6 @@ app.get('/download', async (req, res) => {
 
 				if (err.code === 'ENOENT' && !isFallback) {
 					console.log('Command not found, trying fallback...');
-					// If we tried `python -m yt_dlp`, fall back to the yt-dlp executable
 					if (cmd === 'python' && Array.isArray(cmdArgs) && cmdArgs[0] === '-m' && (cmdArgs[1] === 'yt_dlp' || cmdArgs[1] === 'yt-dlp')) {
 						const fallbackArgs = cmdArgs.slice(2);
 						tryCommand('yt-dlp', fallbackArgs, true);
