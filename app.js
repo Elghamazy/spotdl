@@ -93,7 +93,7 @@ async function googleSearchTracks(query) {
 
 // Search specifically targeting youtube using the provided CX
 async function googleSearchYoutube(query) {
-    const q = encodeURIComponent(`${query} site:Youtube.com`);
+    const q = encodeURIComponent(`${query} site:youtube.com`);
     const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SOUND_CX}&q=${q}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Google CSE error ${res.status}`);
@@ -441,25 +441,13 @@ app.get('/download', async (req, res) => {
 					return;
 				}
 
-				// Move successful download into cache directory (atomic-ish)
-				try {
-					// remove existing cacheDir if present
-					if (fs.existsSync(cacheDir)) {
-						try { fs.rmSync(cacheDir, { recursive: true, force: true }); } catch (e) {}
-					}
-					fs.renameSync(downloadDir, cacheDir);
-					// write metadata
-					const meta = { createdAt: new Date().toISOString(), source: trackUrl };
-					try { fs.writeFileSync(path.join(cacheDir, 'meta.json'), JSON.stringify(meta)); } catch (e) {}
-				} catch (e) {
-					console.warn('Failed to move to cache dir, continuing to serve from tmp dir', e.message);
-				}
-
-				// Send the first music file found
-				const filePath = path.join(cacheDir, path.basename(files[0]));
+				// Do NOT move to persistent cache. Serve file directly from temporary downloadDir
+				const filePath = files[0];
 				console.log(`Sending file: ${path.basename(filePath)}`);
 				console.log(`Full path: ${filePath}`);
-				console.log(`File size: ${fs.statSync(filePath).size} bytes`);
+				try {
+					console.log(`File size: ${fs.statSync(filePath).size} bytes`);
+				} catch (e) {}
 
 				safeRespond(() => {
 					if (wantBase64) {
@@ -469,8 +457,11 @@ app.get('/download', async (req, res) => {
 						} catch (e) {
 							console.error('Error reading file for base64:', e.message);
 							res.status(500).json({ error: 'Failed reading downloaded file' });
+							cleanupDir();
+							return;
 						}
-						// don't delete cached file - let cache cleanup handle it
+						// cleanup temp directory after sending JSON
+						cleanupDir();
 					} else {
 						res.download(filePath, path.basename(filePath), (err) => {
 							if (err) {
@@ -478,6 +469,8 @@ app.get('/download', async (req, res) => {
 							} else {
 								console.log('File sent successfully');
 							}
+							// cleanup temp directory after the download completes (or errors)
+							cleanupDir();
 						});
 					}
 				});
