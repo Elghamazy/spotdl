@@ -8,13 +8,11 @@ const {
 	GOOGLE_CX,
 	SPOTIFY_CLIENT_ID,
 	SPOTIFY_CLIENT_SECRET,
+	SOUND_CX,
 	PORT,
 } = process.env;
 
-// SoundCloud search engine CX (provided)
-const SOUND_CX = '20b7d8e2be65344e5';
-
-if (!GOOGLE_API_KEY || !GOOGLE_CX || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+if (!GOOGLE_API_KEY || !GOOGLE_CX || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SOUND_CX) {
 	console.warn('Missing one or more required env vars. See .env.example');
 }
 
@@ -28,7 +26,7 @@ const app = express();
 app.use(express.json());
 
 // Diagnostic: show presence of required env vars (no secret values)
-const requiredEnv = ['GOOGLE_API_KEY','GOOGLE_CX','SPOTIFY_CLIENT_ID','SPOTIFY_CLIENT_SECRET'];
+const requiredEnv = ['GOOGLE_API_KEY','GOOGLE_CX','SPOTIFY_CLIENT_ID','SPOTIFY_CLIENT_SECRET','SOUND_CX'];
 console.log('Env presence:', requiredEnv.map(k => `${k}=${!!process.env[k]}`).join(', '));
 
 // Health endpoint reports which required env vars are set (boolean)
