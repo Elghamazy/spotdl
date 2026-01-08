@@ -11,6 +11,9 @@ const {
 	PORT,
 } = process.env;
 
+// SoundCloud search engine CX (provided)
+const SOUND_CX = '20b7d8e2be65344e5';
+
 if (!GOOGLE_API_KEY || !GOOGLE_CX || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
 	console.warn('Missing one or more required env vars. See .env.example');
 }
@@ -90,6 +93,16 @@ async function googleSearchTracks(query) {
 	return (data.items || []).map((item) => item.link);
 }
 
+// Search specifically targeting SoundCloud using the provided CX
+async function googleSearchSoundcloud(query) {
+    const q = encodeURIComponent(`${query} site:soundcloud.com`);
+    const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SOUND_CX}&q=${q}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Google CSE error ${res.status}`);
+    const data = await res.json();
+    return (data.items || []).map((item) => item.link);
+}
+
 function extractTrackId(url) {
 	const m = url && url.match(/track\/([A-Za-z0-9]+)/);
 	return m ? m[1] : null;
@@ -160,7 +173,51 @@ app.get('/search', async (req, res) => {
 
 // Download route: downloads to local downloads directory
 app.get('/download', async (req, res) => {
-	const trackUrl = req.query.url || req.query.track_url;
+	let trackUrl = req.query.url || req.query.track_url;
+	const qParam = req.query.q;
+	// If caller provided a search query (song + artist), try the SoundCloud search CX
+	if (!trackUrl && qParam) {
+		try {
+			const links = await googleSearchSoundcloud(qParam);
+			if (links && links.length > 0) {
+				console.log('Search results for q:', qParam, links[0]);
+				if (links[0].includes('soundcloud.com')) {
+					trackUrl = links[0];
+					console.log('Using SoundCloud URL from search:', trackUrl);
+				} else {
+					return res.status(400).json({ error: 'First search result is not a SoundCloud URL' });
+				}
+			} else {
+				return res.status(404).json({ error: 'No search results found' });
+			}
+		} catch (e) {
+			console.error('SoundCloud search error:', e.message);
+			return res.status(500).json({ error: 'SoundCloud search failed' });
+		}
+	}
+
+	// If the provided URL is a Spotify track, try to resolve to a SoundCloud URL
+	if (trackUrl && trackUrl.includes('open.spotify.com/track')) {
+		try {
+			const id = extractTrackId(trackUrl);
+			if (id) {
+				const token = await getSpotifyToken();
+				const info = await getTrackInfo(id, token);
+				const artists = (info.artists || []).map(a => a.name).join(' ');
+				const searchQuery = `${info.name} ${artists}`;
+				console.log('Searching SoundCloud for Spotify track:', searchQuery);
+				const scLinks = await googleSearchSoundcloud(searchQuery);
+				if (scLinks && scLinks.length > 0 && scLinks[0].includes('soundcloud.com')) {
+					console.log('Resolved Spotify track to SoundCloud URL:', scLinks[0]);
+					trackUrl = scLinks[0];
+				} else {
+					console.log('No SoundCloud match found for Spotify track; proceeding with original URL');
+				}
+			}
+		} catch (e) {
+			console.warn('Failed to map Spotify track to SoundCloud:', e.message);
+		}
+	}
 	if (!trackUrl) return res.status(400).json({ error: 'Missing url parameter' });
 	let downloadDir;
 	let responded = false;
@@ -281,10 +338,8 @@ app.get('/download', async (req, res) => {
 
 		console.log('Download directory created successfully');
 
-		// Use the directory path directly (spotdl will create files here)
-		const args = ['--output', downloadDir, trackUrl];
-		
-		console.log('Starting spotdl with args:', args);
+		// Use the directory path directly; we'll use yt-dlp / youtube-dl for downloads
+		console.log('Starting download for URL:', trackUrl);
 		console.log('Working directory:', process.cwd());
 
 		let stderrOutput = '';
@@ -322,10 +377,24 @@ app.get('/download', async (req, res) => {
 
 				if (err.code === 'ENOENT' && !isFallback) {
 					console.log('Command not found, trying fallback...');
-					if (cmd === 'python') {
-						tryCommand('spotdl', args, true);
+					// If we tried `python -m yt_dlp`, fall back to the yt-dlp executable
+					if (cmd === 'python' && Array.isArray(cmdArgs) && cmdArgs[0] === '-m' && (cmdArgs[1] === 'yt_dlp' || cmdArgs[1] === 'yt-dlp')) {
+						const fallbackArgs = cmdArgs.slice(2);
+						tryCommand('yt-dlp', fallbackArgs, true);
+					} else if (cmd === 'yt-dlp') {
+						tryCommand('youtube-dl', cmdArgs, true);
+					} else if (cmd === 'youtube-dl') {
+						hasFailed = true;
+						safeRespond(() => {
+							res.status(500).json({ error: 'yt-dlp / youtube-dl not found. Install yt-dlp or youtube-dl.' });
+						});
+						cleanupDir();
 					} else {
-						tryCommand('python', ['-m', 'spotdl', ...args], true);
+						hasFailed = true;
+						safeRespond(() => {
+							res.status(500).json({ error: `Command not found: ${cmd}` });
+						});
+						cleanupDir();
 					}
 				} else {
 					hasFailed = true;
@@ -428,8 +497,10 @@ app.get('/download', async (req, res) => {
 			});
 		};
 
-		// Start with python -m spotdl command
-		tryCommand('python', ['-m', 'spotdl', ...args]);
+			// Use yt-dlp/youtube-dl for all downloads (remove spotdl usage)
+			const ytArgs = ['-x', '--audio-format', 'mp3', '-o', path.join(downloadDir, '%(title)s.%(ext)s'), trackUrl];
+			// Prefer running yt-dlp as a Python module: `python -m yt_dlp` (fallbacks below)
+			tryCommand('python', ['-m', 'yt_dlp', ...ytArgs]);
 
 	} catch (err) {
 		console.error('Download route error:', err);
