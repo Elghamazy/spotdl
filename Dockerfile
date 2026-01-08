@@ -6,7 +6,7 @@ RUN apk add --no-cache python3 py3-pip ffmpeg build-base
 # Install spotdl (Python package) globally
 RUN python3 -m venv /opt/venv \
 	&& /opt/venv/bin/pip install --upgrade pip \
-	&& /opt/venv/bin/pip install --no-cache-dir spotdl
+	&& /opt/venv/bin/pip install --no-cache-dir yt-dlp
 
 # Ensure venv binaries (including the `spotdl` CLI) are on PATH
 ENV PATH="/opt/venv/bin:${PATH}"
