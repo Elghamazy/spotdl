@@ -349,8 +349,7 @@ app.get('/download', async (req, res) => {
 			console.log(`Attempting command: ${cmd} ${cmdArgs.join(' ')}`);
 
 			const proc = spawn(cmd, cmdArgs, {
-				cwd: process.cwd(),
-				shell: true
+				cwd: process.cwd()
 			});
 
 			activeProc = proc;
